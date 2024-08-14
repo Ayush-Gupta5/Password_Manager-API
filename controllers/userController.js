@@ -7,47 +7,52 @@ class UserController {
   static userRegistration = async (req, res) => {
     const { name, email, password, password_confirmation, tc } = req.body;
     const user = await UserModel.findOne({ email: email });
+
     if (user) {
-      res.send({ status: "failed", message: "Email already exists" });
-    } else {
-      if (name && email && password && password_confirmation && tc) {
-        if (password === password_confirmation) {
-          try {
-            const salt = await bcrypt.genSalt(10);
-            const hashPassword = await bcrypt.hash(password, salt);
-            const userData = new UserModel({
-              name: name,
-              email: email,
-              password: hashPassword,
-              tc: tc,
-            });
-            userData.save();
-            const saved_user = await UserModel.findOne({ email: email });
+      return res.send({ status: "failed", message: "Email already exists" });
+    }
 
-            //Generate JWT Token
-            const token = jwt.sign(
-              { userId: saved_user._id },
-              process.env.JWT_SECRET_KEY,
-              { expiresIn: "5d" }
-            );
+    if (name && email && password && password_confirmation && tc) {
+      if (password === password_confirmation) {
+        try {
+          const salt = await bcrypt.genSalt(10);
+          const hashPassword = await bcrypt.hash(password, salt);
+          const userData = new UserModel({
+            name: name,
+            email: email,
+            password: hashPassword,
+            tc: tc,
+          });
 
-            res.send({
-              status: "success",
-              message: "User registered successfully",
-              token: token,
-            });
-          } catch (error) {
-            res.send({ status: "failed", message: "Unable to register" });
-          }
-        } else {
+          await userData.save(); // Ensure user is saved before proceeding
+
+          // Generate JWT Token
+          const token = jwt.sign(
+            { userId: userData._id }, // Use the _id from the saved user
+            process.env.JWT_SECRET_KEY,
+            { expiresIn: "5d" }
+          );
+
           res.send({
+            status: "success",
+            message: "User registered successfully",
+            token: token,
+          });
+        } catch (error) {
+          res.status(500).send({
             status: "failed",
-            message: "Password and Confirm password doesn't match",
+            message: "Unable to register",
+            error: error.message, // Include error details for debugging
           });
         }
       } else {
-        res.send({ status: "failed", message: "All fields are required" });
+        res.send({
+          status: "failed",
+          message: "Password and Confirm password don't match",
+        });
       }
+    } else {
+      res.send({ status: "failed", message: "All fields are required" });
     }
   };
 
